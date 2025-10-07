@@ -2,107 +2,84 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Live EMA + Supertrend Renko Chart</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>📈 Live Trading Chart</title>
     <style>
       body {
-        font-family: Arial, sans-serif;
-        background: #111;
-        color: white;
+        background: #0b0c10;
+        color: #fff;
+        font-family: "Segoe UI", sans-serif;
         text-align: center;
-        margin: 0;
-        padding: 20px;
-      }
-      h1 {
-        color: #00ff99;
+        padding: 50px;
       }
       #chart {
-        width: 90%;
-        max-width: 900px;
-        height: 500px;
-        margin: 20px auto;
-        background: #222;
-        border-radius: 10px;
-        padding: 10px;
+        height: 400px;
+        width: 80%;
+        margin: 0 auto;
+        background: #1f2833;
+        border-radius: 12px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        padding: 20px;
       }
-      #signalBox {
-        font-size: 1.5rem;
-        margin-top: 20px;
-      }
-      .buy {
-        color: #00ff99;
-      }
-      .sell {
-        color: #ff4444;
+      canvas {
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>
   <body>
-    <h1>📊 Live Renko + EMA + Supertrend</h1>
-    <canvas id="chart"></canvas>
-    <div id="signalBox">Waiting for live data...</div>
+    <h1>📊 Live Renko + EMA + Supertrend Chart</h1>
+    <div id="chart">
+      <canvas id="liveChart"></canvas>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-      const ctx = document.getElementById("chart").getContext("2d");
-
+      const ctx = document.getElementById("liveChart").getContext("2d");
       const chart = new Chart(ctx, {
         type: "line",
         data: {
           labels: [],
           datasets: [
             {
-              label: "Close Price",
+              label: "Live Price",
               data: [],
-              borderColor: "#00bfff",
+              borderColor: "#00FFB9",
               borderWidth: 2,
-              tension: 0.2,
+              tension: 0.4,
             },
           ],
         },
         options: {
           responsive: true,
-          plugins: { legend: { labels: { color: "white" } } },
           scales: {
-            x: { ticks: { color: "white" } },
-            y: { ticks: { color: "white" } },
+            x: {
+              ticks: { color: "#ccc" },
+            },
+            y: {
+              ticks: { color: "#ccc" },
+            },
           },
         },
       });
 
-      const signalBox = document.getElementById("signalBox");
+      // Connect WebSocket to your backend
+      const socket = new WebSocket(
+        "wss://ctrader-trading-bot-1.onrender.com/ws/chart"
+      );
 
-      // Connect to WebSocket
-      const ws = new WebSocket("ws://127.0.0.1:8000/ws");
-
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        const { time, close, signal } = data;
+        chart.data.labels.push(new Date(data.timestamp).toLocaleTimeString());
+        chart.data.datasets[0].data.push(data.price);
 
-        chart.data.labels.push(time);
-        chart.data.datasets[0].data.push(close);
-
-        if (chart.data.labels.length > 50) {
+        // Keep only last 30 points
+        if (chart.data.labels.length > 30) {
           chart.data.labels.shift();
           chart.data.datasets[0].data.shift();
         }
 
         chart.update();
-
-        if (signal === "BUY") {
-          signalBox.innerHTML = "🟢 BUY SIGNAL";
-          signalBox.className = "buy";
-        } else if (signal === "SELL") {
-          signalBox.innerHTML = "🔴 SELL SIGNAL";
-          signalBox.className = "sell";
-        } else {
-          signalBox.innerHTML = "🟡 HOLD";
-          signalBox.className = "";
-        }
       };
-
-      ws.onopen = () => console.log("Connected to WebSocket ✅");
-      ws.onerror = (err) => console.error("WebSocket Error:", err);
     </script>
   </body>
 </html>
