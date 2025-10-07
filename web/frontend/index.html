@@ -1,146 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <title>Live Renko EMA Supertrend</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live EMA + Supertrend Renko Chart</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       body {
         font-family: Arial, sans-serif;
-        background: #f6f6f6;
-      }
-      h2 {
-        color: #222;
+        background: #111;
+        color: white;
         text-align: center;
+        margin: 0;
+        padding: 20px;
+      }
+      h1 {
+        color: #00ff99;
       }
       #chart {
-        width: 100%;
-        height: 700px;
-      }
-      #log {
-        font-family: monospace;
-        white-space: pre-wrap;
+        width: 90%;
+        max-width: 900px;
+        height: 500px;
+        margin: 20px auto;
+        background: #222;
+        border-radius: 10px;
         padding: 10px;
-        background: #fff;
-        margin: 10px;
-        border: 1px solid #ccc;
+      }
+      #signalBox {
+        font-size: 1.5rem;
+        margin-top: 20px;
+      }
+      .buy {
+        color: #00ff99;
+      }
+      .sell {
+        color: #ff4444;
       }
     </style>
   </head>
   <body>
-    <h2>📊 Live Renko + EMA + Supertrend</h2>
-    <div id="chart"></div>
-    <div id="log"></div>
+    <h1>📊 Live Renko + EMA + Supertrend</h1>
+    <canvas id="chart"></canvas>
+    <div id="signalBox">Waiting for live data...</div>
 
     <script>
-      const ws = new WebSocket(`ws://${location.host}/ws`);
-      let x = [],
-        close = [],
-        ema100 = [],
-        ema300 = [],
-        st = [],
-        buy_x = [],
-        buy_y = [],
-        sell_x = [],
-        sell_y = [];
-      Plotly.newPlot("chart", [
-        {
-          x: x,
-          y: close,
-          type: "scatter",
-          mode: "lines",
-          name: "Renko",
-          line: { color: "blue" },
-        },
-        {
-          x: x,
-          y: ema100,
-          type: "scatter",
-          mode: "lines",
-          name: "EMA100",
-          line: { color: "orange" },
-        },
-        {
-          x: x,
-          y: ema300,
-          type: "scatter",
-          mode: "lines",
-          name: "EMA300",
-          line: { color: "purple" },
-        },
-        {
-          x: x,
-          y: st,
-          type: "scatter",
-          mode: "lines",
-          name: "Supertrend",
-          line: { color: "green", dash: "dot" },
-        },
-        {
-          x: buy_x,
-          y: buy_y,
-          mode: "markers",
-          name: "BUY",
-          marker: { color: "lime", size: 10, symbol: "triangle-up" },
-        },
-        {
-          x: sell_x,
-          y: sell_y,
-          mode: "markers",
-          name: "SELL",
-          marker: { color: "red", size: 10, symbol: "triangle-down" },
-        },
-      ]);
-      const log = document.getElementById("log");
+      const ctx = document.getElementById("chart").getContext("2d");
 
-      function logit(msg) {
-        log.textContent = msg + "\n" + log.textContent;
-      }
+      const chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Close Price",
+              data: [],
+              borderColor: "#00bfff",
+              borderWidth: 2,
+              tension: 0.2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: "white" } } },
+          scales: {
+            x: { ticks: { color: "white" } },
+            y: { ticks: { color: "white" } },
+          },
+        },
+      });
 
-      ws.onmessage = (e) => {
-        const m = JSON.parse(e.data);
-        if (m.type !== "bar") return;
-        const b = m.bar;
-        const i = m.index;
-        x.push(i);
-        close.push(b.Close);
-        ema100.push(b.EMA100);
-        ema300.push(b.EMA300);
-        st.push(b.ST);
-        // buy/sell logic for markers
-        if (i > 2) {
-          const prevST = st[i - 2],
-            prevClose = close[i - 2],
-            prevEMA100 = ema100[i - 2],
-            prevEMA300 = ema300[i - 2];
-          if (prevST && prevClose) {
-            const green =
-              prevST < prevClose &&
-              prevEMA100 > prevEMA300 &&
-              b.Low < prevEMA300 &&
-              b.Close > b.Open;
-            const red =
-              prevST > prevClose &&
-              prevEMA100 < prevEMA300 &&
-              b.High > prevEMA300 &&
-              b.Close < b.Open;
-            if (green) {
-              buy_x.push(i);
-              buy_y.push(b.Close);
-              logit(`🟢 BUY @ ${b.Close.toFixed(5)}`);
-            }
-            if (red) {
-              sell_x.push(i);
-              sell_y.push(b.Close);
-              logit(`🔴 SELL @ ${b.Close.toFixed(5)}`);
-            }
-          }
+      const signalBox = document.getElementById("signalBox");
+
+      // Connect to WebSocket
+      const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const { time, close, signal } = data;
+
+        chart.data.labels.push(time);
+        chart.data.datasets[0].data.push(close);
+
+        if (chart.data.labels.length > 50) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
         }
-        Plotly.update("chart", {
-          x: [x, x, x, x, buy_x, sell_x],
-          y: [close, ema100, ema300, st, buy_y, sell_y],
-        });
+
+        chart.update();
+
+        if (signal === "BUY") {
+          signalBox.innerHTML = "🟢 BUY SIGNAL";
+          signalBox.className = "buy";
+        } else if (signal === "SELL") {
+          signalBox.innerHTML = "🔴 SELL SIGNAL";
+          signalBox.className = "sell";
+        } else {
+          signalBox.innerHTML = "🟡 HOLD";
+          signalBox.className = "";
+        }
       };
+
+      ws.onopen = () => console.log("Connected to WebSocket ✅");
+      ws.onerror = (err) => console.error("WebSocket Error:", err);
     </script>
   </body>
 </html>
